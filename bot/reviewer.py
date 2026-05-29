@@ -1,41 +1,42 @@
 import os
-from google import genai
+import google.generativeai as genai
 from github import Github
 
-# Connect to Gemini
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+def review_pr(pr_number, repo_name, token, gemini_key):
+    genai.configure(api_key=gemini_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
 
-# Connect to GitHub
-gh = Github(os.environ["GITHUB_TOKEN"])
-repo = gh.get_repo(os.environ["GITHUB_REPOSITORY"])
-pr_number = int(os.environ["PR_NUMBER"])
-pr = repo.get_pull(pr_number)
+    g = Github(token)
+    repo = g.get_repo(repo_name)
+    pr = repo.get_pull(pr_number)
 
-# Get changed code
-code_diff = ""
-for file in pr.get_files():
-    code_diff += f"\n\nFile: {file.filename}\n"
-    code_diff += file.patch or "(binary file)"
+    files = pr.get_files()
+    diff_text = ""
+    for f in files:
+        diff_text += f"\n### {f.filename}\n"
+        if f.patch:
+            diff_text += f.patch
 
-# Ask Gemini to review
-prompt = f"""
-You are a senior software engineer doing a code review.
-Review this code and give feedback on:
-- Bugs or errors
-- Code quality
-- Security concerns
-- Suggestions
+    prompt = f"""You are a senior code reviewer. Review this pull request diff and provide:
+1. A brief summary of what changed
+2. Any bugs or issues you spot
+3. Suggestions for improvement
+4. Overall assessment (Approve / Request Changes)
 
-Code changes:
-{code_diff}
+Here is the diff:
+{diff_text}
 """
 
-response = client.models.generate_content(
-    model="gemini-2.0-flash",
-    contents=prompt
-)
-review = response.text
+    response = model.generate_content(prompt)
+    review_body = response.text
 
-# Post review as PR comment
-pr.create_issue_comment(f"## 🤖 ReviewMate AI\n\n{review}")
-print("✅ Review posted!")
+    pr.create_issue_comment(f"## 🤖 ReviewMate AI Review\n\n{review_body}")
+    print("Review posted successfully!")
+
+if __name__ == "__main__":
+    token = os.environ["GITHUB_TOKEN"]
+    gemini_key = os.environ["GEMINI_API_KEY"]
+    repo_name = os.environ["REPO_NAME"]
+    pr_number = int(os.environ["PR_NUMBER"])
+
+    review_pr(pr_number, repo_name, token, gemini_key)
