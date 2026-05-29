@@ -1,15 +1,25 @@
-import os
-import google.generativeai as genai
-from github import Github
+ import os
+from google import genai
+from github import Github, Auth
 
-def review_pr(pr_number, repo_name, token, gemini_key):
-    genai.configure(api_key=gemini_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+def main():
+    # Auth
+    token = os.environ["GITHUB_TOKEN"]
+    gemini_key = os.environ["GEMINI_API_KEY"]
+    repo_name = os.environ["REPO_NAME"]
+    pr_number = int(os.environ["PR_NUMBER"])
 
-    g = Github(token)
+    # Gemini setup (new SDK)
+    client = genai.Client(api_key=gemini_key)
+
+    # GitHub setup (new auth style)
+    auth = Auth.Token(token)
+    g = Github(auth=auth)
+
     repo = g.get_repo(repo_name)
     pr = repo.get_pull(pr_number)
 
+    # Get diff
     files = pr.get_files()
     diff_text = ""
     for f in files:
@@ -27,16 +37,15 @@ Here is the diff:
 {diff_text}
 """
 
-    response = model.generate_content(prompt)
-    review_body = response.text
+    # Call Gemini
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
 
+    review_body = response.text
     pr.create_issue_comment(f"## 🤖 ReviewMate AI Review\n\n{review_body}")
     print("Review posted successfully!")
 
 if __name__ == "__main__":
-    token = os.environ["GITHUB_TOKEN"]
-    gemini_key = os.environ["GEMINI_API_KEY"]
-    repo_name = os.environ["REPO_NAME"]
-    pr_number = int(os.environ["PR_NUMBER"])
-
-    review_pr(pr_number, repo_name, token, gemini_key)
+    main()
