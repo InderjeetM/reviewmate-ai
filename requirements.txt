@@ -1,6 +1,3 @@
-google-genai
 PyGithub
+google-generativeai
 requests
-pylint
-chromadb
-sentence-transformers
